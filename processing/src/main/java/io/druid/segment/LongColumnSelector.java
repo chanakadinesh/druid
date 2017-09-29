@@ -19,9 +19,14 @@
 
 package io.druid.segment;
 
+import io.druid.collections.bitmap.ImmutableBitmap;
+
+import java.util.ArrayList;
+
 /**
  */
 public interface LongColumnSelector extends ColumnValueSelector
 {
   public long get();
+  public ArrayList<ImmutableBitmap> getBitslice();
 }

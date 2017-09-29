@@ -104,7 +104,6 @@ public class BitmapOffset implements Offset
     if (bitmapIndex == null || bitmapIndex.size() == 0) {
       return new BitmapOffset(bitmapFactory, bitmapFactory.makeEmptyImmutableBitmap(), descending);
     }
-
     return new BitmapOffset(this);
   }
 

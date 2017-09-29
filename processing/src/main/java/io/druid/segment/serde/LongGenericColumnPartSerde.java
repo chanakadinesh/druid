@@ -21,11 +21,16 @@ package io.druid.segment.serde;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.druid.collections.bitmap.ImmutableBitmap;
+import io.druid.java.util.common.logger.Logger;
 import io.druid.segment.LongColumnSerializer;
 import io.druid.segment.column.ColumnBuilder;
 import io.druid.segment.column.ColumnConfig;
 import io.druid.segment.column.ValueType;
+import io.druid.segment.data.BitSliceIndexedLongs;
+import io.druid.segment.data.BitmapSerdeFactory;
 import io.druid.segment.data.CompressedLongsIndexedSupplier;
+import io.druid.segment.data.GenericIndexed;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -38,20 +43,34 @@ public class LongGenericColumnPartSerde implements ColumnPartSerde
 {
   @JsonCreator
   public static LongGenericColumnPartSerde createDeserializer(
-      @JsonProperty("byteOrder") ByteOrder byteOrder
+      @JsonProperty("byteOrder") ByteOrder byteOrder,
+      @JsonProperty("serdeFactory") BitmapSerdeFactory serdeFactory
   )
   {
-    return new LongGenericColumnPartSerde(byteOrder, null);
+    return new LongGenericColumnPartSerde(byteOrder, null,serdeFactory);
   }
 
   private final ByteOrder byteOrder;
   private Serializer serializer;
+  private final BitmapSerdeFactory serdeFactory;
 
-  private LongGenericColumnPartSerde(ByteOrder byteOrder, Serializer serializer)
+  private LongGenericColumnPartSerde(ByteOrder byteOrder, Serializer serializer,
+                                     BitmapSerdeFactory serdeFactory)
   {
     this.byteOrder = byteOrder;
     this.serializer = serializer;
+    this.serdeFactory=serdeFactory;
   }
+
+  /*private LongGenericColumnPartSerde(ByteOrder byteOrder, Serializer serializer)
+  {
+    this.byteOrder = byteOrder;
+    this.serializer = serializer;
+    this.serdeFactory=null;
+  }*/
+
+  @JsonProperty
+  public BitmapSerdeFactory getSerdeFactory(){return serdeFactory;}
 
   @JsonProperty
   public ByteOrder getByteOrder()
@@ -68,6 +87,7 @@ public class LongGenericColumnPartSerde implements ColumnPartSerde
   {
     private ByteOrder byteOrder = null;
     private LongColumnSerializer delegate = null;
+    private BitmapSerdeFactory serdeFactory=null;
 
     public SerializerBuilder withByteOrder(final ByteOrder byteOrder)
     {
@@ -78,6 +98,11 @@ public class LongGenericColumnPartSerde implements ColumnPartSerde
     public SerializerBuilder withDelegate(final LongColumnSerializer delegate)
     {
       this.delegate = delegate;
+      return this;
+    }
+
+    public SerializerBuilder withSerdeFactory(final BitmapSerdeFactory serdeFactory){
+      this.serdeFactory=serdeFactory;
       return this;
     }
 
@@ -97,7 +122,7 @@ public class LongGenericColumnPartSerde implements ColumnPartSerde
         {
           delegate.writeToChannel(channel);
         }
-      }
+      }, serdeFactory
       );
     }
   }
@@ -140,7 +165,7 @@ public class LongGenericColumnPartSerde implements ColumnPartSerde
         {
           delegate.writeToChannel(channel);
         }
-      }
+      },null
       );
     }
   }
@@ -156,16 +181,26 @@ public class LongGenericColumnPartSerde implements ColumnPartSerde
   {
     return new Deserializer()
     {
+      private final Logger log = new Logger(LongGenericColumnPartSerde.class);
       @Override
       public void read(ByteBuffer buffer, ColumnBuilder builder, ColumnConfig columnConfig)
       {
-        final CompressedLongsIndexedSupplier column = CompressedLongsIndexedSupplier.fromByteBuffer(
-            buffer,
-            byteOrder
-        );
-        builder.setType(ValueType.LONG)
-               .setHasMultipleValues(false)
-               .setGenericColumn(new LongGenericColumnSupplier(column));
+        if(serdeFactory==null) {
+          final CompressedLongsIndexedSupplier column = CompressedLongsIndexedSupplier.fromByteBuffer(
+              buffer,
+              byteOrder
+          );
+          builder.setType(ValueType.LONG)
+                 .setHasMultipleValues(false)
+                 .setGenericColumn(new LongGenericColumnSupplier(column));
+        }else {
+          GenericIndexed<ImmutableBitmap> bitmaps = GenericIndexed.read(buffer, serdeFactory.getObjectStrategy());
+          log.debug("bitmap loaded size : %d",bitmaps.size());
+          log.debug("bitmap loaded 0 posission: %d",bitmaps.get(0).size());
+          builder.setType(ValueType.LONG)
+                 .setHasMultipleValues(false)
+                 .setGenericColumn(new LongGenericColumnSupplier(new BitSliceIndexedLongs(bitmaps)));
+        }
       }
     };
   }

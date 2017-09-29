@@ -1019,8 +1019,9 @@ public class IndexIO
       }
 
       Map<String, Column> columns = Maps.newHashMap();
-
+      log.debug("deserializing columns started");
       for (String columnName : cols) {
+        log.debug("deserialize column %s",columnName);
         columns.put(columnName, deserializeColumn(mapper, smooshedFiles.mapFile(columnName)));
       }
 
@@ -1040,6 +1041,7 @@ public class IndexIO
       ColumnDescriptor serde = mapper.readValue(
           serializerUtils.readString(byteBuffer), ColumnDescriptor.class
       );
+      log.debug("deserializing column type : %s",serde.getValueType());
       return serde.read(byteBuffer, columnConfig);
     }
   }

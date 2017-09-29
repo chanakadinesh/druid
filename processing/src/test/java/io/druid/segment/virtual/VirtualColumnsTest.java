@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Longs;
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.jackson.DefaultObjectMapper;
 import io.druid.query.dimension.DefaultDimensionSpec;
 import io.druid.query.dimension.DimensionSpec;
@@ -52,6 +53,7 @@ import org.junit.rules.ExpectedException;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -386,6 +388,11 @@ public class VirtualColumnsTest
         public long get()
         {
           return theLong;
+        }
+
+        @Override
+        public ArrayList<ImmutableBitmap> getBitslice() {
+          return null;
         }
       };
     }

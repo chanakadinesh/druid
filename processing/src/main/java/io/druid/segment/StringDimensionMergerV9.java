@@ -224,7 +224,6 @@ public class StringDimensionMergerV9 implements DimensionMergerV9<int[]>
     encodedValueWriter.open();
   }
 
-
   @Override
   public int[] convertSegmentRowValuesToMergedRowValues(int[] segmentRow, int segmentIndexNumber)
   {
@@ -402,7 +401,6 @@ public class StringDimensionMergerV9 implements DimensionMergerV9<int[]>
     }
 
     bitmapWriter.write(bmpFactory.makeImmutableBitmap(mergedIndexes));
-
     if (hasSpatial) {
       String dimVal = dimVals.get(dictId);
       if (dimVal != null) {

@@ -19,11 +19,13 @@
 
 package io.druid.query.aggregation;
 
+import io.druid.collections.bitmap.ImmutableBitmap;
+
 import java.util.Comparator;
 
 /**
  */
-public class CountAggregator implements Aggregator
+public class CountAggregator implements Aggregator,BitsliceAggregator
 {
   static final Comparator COMPARATOR = LongSumAggregator.COMPARATOR;
 
@@ -78,5 +80,10 @@ public class CountAggregator implements Aggregator
   public void close()
   {
     // no resources to cleanup
+  }
+
+  @Override
+  public void aggregate(ImmutableBitmap filter) {
+    count+=filter.size();
   }
 }

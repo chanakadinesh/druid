@@ -23,6 +23,7 @@ import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.granularity.QueryGranularity;
 import io.druid.java.util.common.guava.Sequence;
 import io.druid.java.util.common.guava.Sequences;
@@ -59,6 +60,7 @@ import org.joda.time.DateTime;
 import org.joda.time.Interval;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -336,6 +338,11 @@ public class IncrementalIndexStorageAdapter implements StorageAdapter
               }
 
               @Override
+              public ImmutableBitmap getFilter() {
+                return null;
+              }
+
+              @Override
               public DimensionSelector makeDimensionSelector(
                   DimensionSpec dimensionSpec
               )
@@ -431,6 +438,11 @@ public class IncrementalIndexStorageAdapter implements StorageAdapter
                     {
                       return currEntry.getKey().getTimestamp();
                     }
+
+                    @Override
+                    public ArrayList<ImmutableBitmap> getBitslice() {
+                      return null;
+                    }
                   };
                 }
 
@@ -461,6 +473,11 @@ public class IncrementalIndexStorageAdapter implements StorageAdapter
                         currEntry.getValue(),
                         metricIndex
                     );
+                  }
+
+                  @Override
+                  public ArrayList<ImmutableBitmap> getBitslice() {
+                    return null;
                   }
                 };
               }

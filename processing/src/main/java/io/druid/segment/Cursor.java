@@ -17,7 +17,10 @@
  * under the License.
  */
 
-package io.druid.segment;import org.joda.time.DateTime;
+package io.druid.segment;
+
+import io.druid.collections.bitmap.ImmutableBitmap;
+import org.joda.time.DateTime;
 
 /**
  */
@@ -29,4 +32,5 @@ public interface Cursor extends ColumnSelectorFactory
   public void advanceTo(int offset);
   public boolean isDone();
   public void reset();
+  public ImmutableBitmap getFilter();
 }

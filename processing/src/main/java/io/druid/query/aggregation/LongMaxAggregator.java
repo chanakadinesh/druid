@@ -19,13 +19,15 @@
 
 package io.druid.query.aggregation;
 
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.segment.LongColumnSelector;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 
 /**
  */
-public class LongMaxAggregator implements Aggregator
+public class LongMaxAggregator implements Aggregator,BitsliceAggregator
 {
   static final Comparator COMPARATOR = LongSumAggregator.COMPARATOR;
 
@@ -35,13 +37,14 @@ public class LongMaxAggregator implements Aggregator
   }
 
   private final LongColumnSelector selector;
+  private ArrayList<ImmutableBitmap> bitmaps;
 
   private long max;
 
   public LongMaxAggregator(LongColumnSelector selector)
   {
     this.selector = selector;
-
+    this.bitmaps=selector.getBitslice();
     reset();
   }
 
@@ -81,9 +84,24 @@ public class LongMaxAggregator implements Aggregator
     return new LongMaxAggregator(selector);
   }
 
+
+
   @Override
   public void close()
   {
     // no resources to cleanup
+  }
+
+  @Override
+  public void aggregate(ImmutableBitmap filter) {
+    max=0;
+    ImmutableBitmap comparator=filter;
+    for(int i=bitmaps.size()-1;i>0;i--){
+      ImmutableBitmap temp=bitmaps.get(i).intersection(comparator);
+      if(!temp.isEmpty()){
+        comparator=temp;
+        max+=(1<<(i-1));
+      }
+    }
   }
 }

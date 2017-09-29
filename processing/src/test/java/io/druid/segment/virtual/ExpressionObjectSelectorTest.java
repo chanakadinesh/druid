@@ -20,6 +20,7 @@
 package io.druid.segment.virtual;
 
 import com.google.common.base.Supplier;
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.common.guava.SettableSupplier;
 import io.druid.segment.FloatColumnSelector;
 import io.druid.segment.LongColumnSelector;
@@ -27,6 +28,7 @@ import io.druid.segment.ObjectColumnSelector;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class ExpressionObjectSelectorTest
@@ -41,6 +43,11 @@ public class ExpressionObjectSelectorTest
           public long get()
           {
             return 1L;
+          }
+
+          @Override
+          public ArrayList<ImmutableBitmap> getBitslice() {
+            return null;
           }
         }
     );

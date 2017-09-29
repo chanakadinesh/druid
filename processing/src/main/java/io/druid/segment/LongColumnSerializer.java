@@ -19,6 +19,8 @@
 
 package io.druid.segment;
 
+import io.druid.segment.data.BitSliceLongSupplierSerializer;
+import io.druid.segment.data.BitmapSerdeFactory;
 import io.druid.segment.data.CompressedObjectStrategy;
 import io.druid.segment.data.CompressionFactory;
 import io.druid.segment.data.IOPeon;
@@ -46,6 +48,8 @@ public class LongColumnSerializer implements GenericColumnSerializer
   private final CompressedObjectStrategy.CompressionStrategy compression;
   private final CompressionFactory.LongEncodingStrategy encoding;
   private LongSupplierSerializer writer;
+  private BitmapSerdeFactory factory;
+  private boolean bitSliceEnabled=false;
 
   public LongColumnSerializer(
       IOPeon ioPeon,
@@ -60,18 +64,34 @@ public class LongColumnSerializer implements GenericColumnSerializer
     this.byteOrder = byteOrder;
     this.compression = compression;
     this.encoding = encoding;
+    this.bitSliceEnabled=false;
+  }
+
+  public LongColumnSerializer factory(BitmapSerdeFactory factory){
+    this.factory=factory;
+    this.bitSliceEnabled=true;
+    return this;
   }
 
   @Override
   public void open() throws IOException
   {
-    writer = CompressionFactory.getLongSerializer(
-        ioPeon,
-        String.format("%s.long_column", filenameBase),
-        byteOrder,
-        encoding,
-        compression
-    );
+    if(!bitSliceEnabled){
+      writer = CompressionFactory.getLongSerializer(
+          ioPeon,
+          String.format("%s.long_column", filenameBase),
+          byteOrder,
+          encoding,
+          compression
+      );
+    }else {
+      writer= new BitSliceLongSupplierSerializer(ioPeon,
+                                                 byteOrder,
+                                                 encoding,
+                                                 compression,
+                                                 factory,
+                                                 filenameBase);
+    }
     writer.open();
   }
 

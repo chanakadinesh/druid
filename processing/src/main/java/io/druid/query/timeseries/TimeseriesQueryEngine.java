@@ -25,6 +25,7 @@ import io.druid.query.QueryRunnerHelper;
 import io.druid.query.Result;
 import io.druid.query.aggregation.Aggregator;
 import io.druid.query.aggregation.AggregatorFactory;
+import io.druid.query.aggregation.BitsliceAggregator;
 import io.druid.query.filter.Filter;
 import io.druid.segment.Cursor;
 import io.druid.segment.SegmentMissingException;
@@ -32,6 +33,7 @@ import io.druid.segment.StorageAdapter;
 import io.druid.segment.VirtualColumns;
 import io.druid.segment.filter.Filters;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -64,11 +66,15 @@ public class TimeseriesQueryEngine
           public Result<TimeseriesResultValue> apply(Cursor cursor)
           {
             Aggregator[] aggregators = new Aggregator[aggregatorSpecs.size()];
+            ArrayList<Aggregator> BitsliceAggregator=new ArrayList<Aggregator>();
             String[] aggregatorNames = new String[aggregatorSpecs.size()];
-
+            boolean runwhile=false;
             for (int i = 0; i < aggregatorSpecs.size(); i++) {
               aggregators[i] = aggregatorSpecs.get(i).factorize(cursor);
               aggregatorNames[i] = aggregatorSpecs.get(i).getName();
+              if(aggregators[i] instanceof BitsliceAggregator){
+                BitsliceAggregator.add(aggregators[i]);
+              }else{runwhile=true;}
             }
 
             if (skipEmptyBuckets && cursor.isDone()) {
@@ -76,11 +82,15 @@ public class TimeseriesQueryEngine
             }
 
             try {
-              while (!cursor.isDone()) {
+
+              while (runwhile && (!cursor.isDone())) {
                 for (Aggregator aggregator : aggregators) {
                   aggregator.aggregate();
                 }
                 cursor.advance();
+              }
+              for(Aggregator agg:BitsliceAggregator){
+                ((BitsliceAggregator)agg).aggregate(cursor.getFilter());
               }
 
               TimeseriesResultBuilder bob = new TimeseriesResultBuilder(cursor.getTime());

@@ -19,6 +19,7 @@
 
 package io.druid.query.aggregation;
 
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.hll.HyperLogLogCollector;
 import io.druid.query.aggregation.hyperloglog.HyperUniquesAggregatorFactory;
 import io.druid.segment.LongColumnSelector;
@@ -48,6 +49,11 @@ public class MetricManipulatorFnsTest
           public long get()
           {
             return longVal;
+          }
+
+          @Override
+          public ArrayList<ImmutableBitmap> getBitslice() {
+            return null;
           }
         }
     );
@@ -87,6 +93,11 @@ public class MetricManipulatorFnsTest
           public long get()
           {
             return longVal;
+          }
+
+          @Override
+          public ArrayList<ImmutableBitmap> getBitslice() {
+            return null;
           }
         }
     );

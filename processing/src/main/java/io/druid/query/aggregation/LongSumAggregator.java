@@ -20,13 +20,15 @@
 package io.druid.query.aggregation;
 
 import com.google.common.primitives.Longs;
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.segment.LongColumnSelector;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 
 /**
  */
-public class LongSumAggregator implements Aggregator
+public class LongSumAggregator implements Aggregator,BitsliceAggregator
 {
   static final Comparator COMPARATOR = new Comparator()
   {
@@ -45,20 +47,27 @@ public class LongSumAggregator implements Aggregator
   private final LongColumnSelector selector;
 
   private long sum;
+  private ArrayList<ImmutableBitmap> bitmaps;
 
   public LongSumAggregator(LongColumnSelector selector)
   {
     this.selector = selector;
-
+    this.bitmaps=selector.getBitslice();
     this.sum = 0;
+  }
+
+  public void aggregate(ImmutableBitmap filter){
+    for(int i=1;i<bitmaps.size();i++){
+      ImmutableBitmap b=bitmaps.get(i).intersection(filter);
+      sum+=((b.size())*(1<<(i-1)));
+    }
   }
 
   @Override
   public void aggregate()
   {
-    sum += selector.get();
+      sum += selector.get();
   }
-
   @Override
   public void reset()
   {
@@ -92,6 +101,7 @@ public class LongSumAggregator implements Aggregator
   @Override
   public void close()
   {
+    bitmaps=null;
     // no resources to cleanup
   }
 }

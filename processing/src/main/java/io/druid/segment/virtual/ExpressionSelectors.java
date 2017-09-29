@@ -19,12 +19,15 @@
 
 package io.druid.segment.virtual;
 
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.math.expr.Expr;
 import io.druid.query.extraction.ExtractionFn;
 import io.druid.segment.ColumnSelectorFactory;
 import io.druid.segment.DimensionSelector;
 import io.druid.segment.FloatColumnSelector;
 import io.druid.segment.LongColumnSelector;
+
+import java.util.ArrayList;
 
 public class ExpressionSelectors
 {
@@ -55,6 +58,11 @@ public class ExpressionSelectors
       {
         final Number number = baseSelector.get();
         return number != null ? number.longValue() : nullValue;
+      }
+
+      @Override
+      public ArrayList<ImmutableBitmap> getBitslice() {
+        return null;
       }
     }
     return new ExpressionLongColumnSelector();

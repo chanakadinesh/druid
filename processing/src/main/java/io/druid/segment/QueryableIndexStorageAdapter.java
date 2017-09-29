@@ -27,10 +27,13 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.io.Closer;
+import io.druid.collections.bitmap.BitmapFactory;
 import io.druid.collections.bitmap.ImmutableBitmap;
+import io.druid.collections.bitmap.MutableBitmap;
 import io.druid.granularity.QueryGranularity;
 import io.druid.java.util.common.guava.Sequence;
 import io.druid.java.util.common.guava.Sequences;
+import io.druid.java.util.common.logger.Logger;
 import io.druid.query.QueryInterruptedException;
 import io.druid.query.dimension.DimensionSpec;
 import io.druid.query.extraction.ExtractionFn;
@@ -44,6 +47,7 @@ import io.druid.segment.column.ColumnCapabilities;
 import io.druid.segment.column.ComplexColumn;
 import io.druid.segment.column.DictionaryEncodedColumn;
 import io.druid.segment.column.GenericColumn;
+import io.druid.segment.column.IndexedLongsGenericColumn;
 import io.druid.segment.column.ValueType;
 import io.druid.segment.data.Indexed;
 import io.druid.segment.data.IndexedInts;
@@ -68,7 +72,7 @@ import java.util.Map;
 public class QueryableIndexStorageAdapter implements StorageAdapter
 {
   private final QueryableIndex index;
-
+  private static final Logger log = new Logger(QueryableIndexStorageAdapter.class);
   public QueryableIndexStorageAdapter(
       QueryableIndex index
   )
@@ -245,9 +249,12 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
      * Any subfilters that cannot be processed entirely with bitmap indexes will be moved to the post-filtering stage.
      */
     final Offset offset;
+    final ImmutableBitmap offsetBitmap;
+    BitmapFactory factory=selector.getBitmapFactory();
     final List<Filter> postFilters = new ArrayList<>();
     if (filter == null) {
       offset = new NoFilterOffset(0, index.getNumRows(), descending);
+      offsetBitmap=factory.complement(factory.makeEmptyImmutableBitmap(),index.getNumRows());
     } else {
       final List<Filter> preFilters = new ArrayList<>();
 
@@ -270,12 +277,14 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
       }
 
       if (preFilters.size() == 0) {
-        offset = new NoFilterOffset(0, index.getNumRows(), descending);
+        offset = new NoFilterOffset(0, index.getNumRows(), descending);  //Get bitmap of all '1's
+        offsetBitmap=factory.complement(factory.makeEmptyImmutableBitmap(),index.getNumRows());
       } else {
         // Use AndFilter.getBitmapIndex to intersect the preFilters to get its short-circuiting behavior.
+        offsetBitmap=AndFilter.getBitmapIndex(selector, preFilters);
         offset = new BitmapOffset(
-            selector.getBitmapFactory(),
-            AndFilter.getBitmapIndex(selector, preFilters),
+            factory,
+            offsetBitmap,  //Get bitmap filtered by preFilters
             descending
         );
       }
@@ -289,7 +298,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
     } else {
       postFilter = new AndFilter(postFilters);
     }
-
+    log.debug("filterbitmap size after pre-filter:".concat(Integer.toString(offsetBitmap.size())));
     return Sequences.filter(
         new CursorSequenceBuilder(
             this,
@@ -301,7 +310,8 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
             maxDataTimestamp,
             descending,
             postFilter,
-            selector
+            selector,
+            offsetBitmap
         ).build(),
         Predicates.<Cursor>notNull()
     );
@@ -329,6 +339,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
     private final boolean descending;
     private final Filter postFilter;
     private final ColumnSelectorBitmapIndexSelector bitmapIndexSelector;
+    private final ImmutableBitmap offsetBitmap;
 
     public CursorSequenceBuilder(
         QueryableIndexStorageAdapter storageAdapter,
@@ -340,7 +351,8 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
         long maxDataTimestamp,
         boolean descending,
         Filter postFilter,
-        ColumnSelectorBitmapIndexSelector bitmapIndexSelector
+        ColumnSelectorBitmapIndexSelector bitmapIndexSelector,
+        ImmutableBitmap offsetBitmap
     )
     {
       this.storageAdapter = storageAdapter;
@@ -354,11 +366,13 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
       this.descending = descending;
       this.postFilter = postFilter;
       this.bitmapIndexSelector = bitmapIndexSelector;
+      this.offsetBitmap=offsetBitmap;
     }
 
     public Sequence<Cursor> build()
     {
       final Offset baseOffset = offset.clone();
+
 
       final Map<String, DictionaryEncodedColumn> dictionaryColumnCache = Maps.newHashMap();
       final Map<String, GenericColumn> genericColumnCache = Maps.newHashMap();
@@ -373,7 +387,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
       if (descending) {
         iterable = Lists.reverse(ImmutableList.copyOf(iterable));
       }
-
+      final BitmapFactory factory=bitmapIndexSelector.getBitmapFactory();
       return Sequences.withBaggage(
           Sequences.map(
               Sequences.simple(iterable),
@@ -384,20 +398,42 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                 {
                   final long timeStart = Math.max(interval.getStartMillis(), input);
                   final long timeEnd = Math.min(interval.getEndMillis(), gran.next(input));
-
-                  if (descending) {
+                  final MutableBitmap baseOffsetBitmap=factory.makeEmptyMutableBitmap();
+                 // int startoffset=baseOffset.getOffset(),endoffset;
+                  if (descending) {  //Make '0' till upper-bound from the end
                     for (; baseOffset.withinBounds(); baseOffset.increment()) {
+
                       if (timestamps.getLongSingleValueRow(baseOffset.getOffset()) < timeEnd) {
                         break;
                       }
+                      baseOffsetBitmap.add(baseOffset.getOffset());
                     }
-                  } else {
+                  } else { //Make '0' till lower-bound from the beginning
                     for (; baseOffset.withinBounds(); baseOffset.increment()) {
                       if (timestamps.getLongSingleValueRow(baseOffset.getOffset()) >= timeStart) {
                         break;
                       }
+                      baseOffsetBitmap.add(baseOffset.getOffset());
                     }
                   }
+                  log.debug("baseOffsetbitmap size :".concat(Integer.toString
+                          (baseOffsetBitmap.size
+                          ())));
+                  //Only work for ascending order queries.
+                  ImmutableBitmap b=factory.makeImmutableBitmap(baseOffsetBitmap);
+
+                  final ImmutableBitmap initfliter=offsetBitmap.intersection(factory.complement
+                          (b,index.getNumRows()));
+                  //final ImmutableBitmap initfliter2=offsetBitmap.difference(b);
+
+                  log.debug("Is initfiltermap null?:".concat(Boolean.toString(initfliter==null|| initfliter
+                        .isEmpty())));
+                   /**
+                   * Ascending
+                   * binary-search to find upper-offset
+                   * Create new '1's bitmap of size upper-offset
+                   * Make AND with filter bitmap
+                   */
 
                   final Offset offset = descending ?
                                         new DescendingTimestampCheckingOffset(
@@ -418,9 +454,20 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                   final DateTime myBucket = gran.toDateTime(input);
                   final CursorOffsetHolder cursorOffsetHolder = new CursorOffsetHolder();
 
+                          ;//change this to pre-filter bitmap
+
                   abstract class QueryableIndexBaseCursor implements Cursor
                   {
                     Offset cursorOffset;
+                    ImmutableBitmap filter;
+                    //bitmap filter index
+                    //getFitlterBitmap() method
+                    public ImmutableBitmap getFilter(){
+                      if(filter==null){
+                        log.debug("filter is null in getFilter");
+                      }
+                      return filter;
+                    }
 
                     @Override
                     public DimensionSelector makeDimensionSelector(
@@ -657,7 +704,6 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                       }
                     }
 
-
                     @Override
                     public FloatColumnSelector makeFloatColumnSelector(String columnName)
                     {
@@ -696,6 +742,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                     public LongColumnSelector makeLongColumnSelector(String columnName)
                     {
                       if (virtualColumns.exists(columnName)) {
+	                      log.debug("get virtualcolmun");
                         return virtualColumns.makeLongColumnSelector(columnName, this);
                       }
 
@@ -706,22 +753,43 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                         if (holder != null && (holder.getCapabilities().getType() == ValueType.LONG
                                                || holder.getCapabilities().getType() == ValueType.FLOAT)) {
                           cachedMetricVals = holder.getGenericColumn();
+
                           closer.register(cachedMetricVals);
                           genericColumnCache.put(columnName, cachedMetricVals);
+	                        log.debug("cache is nill so we took column from storage");
                         }
                       }
 
                       if (cachedMetricVals == null) {
-                        return ZeroLongColumnSelector.instance();
+	                      log.debug("zerolongcolumnselector took");
+	                      return ZeroLongColumnSelector.instance();
+
                       }
 
                       final GenericColumn metricVals = cachedMetricVals;
+                      final ArrayList<ImmutableBitmap> bitslices;
+
+                      if(metricVals instanceof IndexedLongsGenericColumn){
+                        bitslices=((IndexedLongsGenericColumn)metricVals).getLongBitslice();
+	                      log.debug("Number of bitslices in QueryAdapter :".concat(Integer.toString
+			                      (bitslices.size())));
+                      }else{
+	                      log.debug("metricVals is not an instance of IndexedGenericColumn");
+                        bitslices=null;
+                      }
+
+
+
                       return new LongColumnSelector()
                       {
                         @Override
                         public long get()
                         {
                           return metricVals.getLongSingleValueRow(cursorOffset.getOffset());
+                        }
+
+                        public ArrayList<ImmutableBitmap> getBitslice(){
+                          return bitslices;
                         }
                       };
                     }
@@ -938,6 +1006,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                       {
                         cursorOffset = initOffset.clone();
                         cursorOffsetHolder.set(cursorOffset);
+                        filter=initfliter;
                       }
                     };
                   } else {
@@ -949,6 +1018,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                       );
 
                       final ValueMatcher filterMatcher;
+
 
                       {
                         if (postFilter instanceof BooleanFilter) {
@@ -995,6 +1065,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                             cursorOffset.increment();
                           }
                         }
+                        //get AND with post-filter bitmap
                       }
 
                       @Override
@@ -1017,6 +1088,7 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
                       public void reset()
                       {
                         cursorOffset = initOffset.clone();
+                        filter=initfliter;
                         cursorOffsetHolder.set(cursorOffset);
                         if (!isDone()) {
                           if (filterMatcher.matches()) {
@@ -1111,7 +1183,6 @@ public class QueryableIndexStorageAdapter implements StorageAdapter
       }
     }
   }
-
 
   private abstract static class TimestampCheckingOffset implements Offset
   {

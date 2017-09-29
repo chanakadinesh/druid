@@ -74,8 +74,7 @@ public class QueryRunnerHelper
   }
 
   public static <T>  QueryRunner<T> makeClosingQueryRunner(final QueryRunner<T> runner, final Closeable closeable){
-    return new QueryRunner<T>()
-    {
+    return new QueryRunner<T>() {
       @Override
       public Sequence<T> run(Query<T> query, Map<String, Object> responseContext)
       {

@@ -578,6 +578,8 @@ public class StringDimensionIndexer implements DimensionIndexer<Integer, int[], 
     return sortedDimVals;
   }
 
+
+  //Making a row value as 1 //Compatible with multi-value rows
   @Override
   public void fillBitmapsFromUnsortedEncodedArray(
       int[] key, int rowNum, MutableBitmap[] bitmapIndexes, BitmapFactory factory

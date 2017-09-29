@@ -190,6 +190,7 @@ public class IndexMergerV9 extends IndexMerger
 
       /************* Walk through data sets, merge them, and write merged columns *************/
       progress.progress();
+      log.debug("makeRowIterable started");
       final Iterable<Rowboat> theRows = makeRowIterable(
           adapters,
           mergedDimensions,
@@ -199,22 +200,28 @@ public class IndexMergerV9 extends IndexMerger
           handlers,
           mergers
       );
+      log.debug("makeRowIterable completed and time writer setup started");
       final LongColumnSerializer timeWriter = setupTimeWriter(ioPeon, indexSpec);
+      log.debug("time serializer created and metric writers creation started");
       final ArrayList<GenericColumnSerializer> metWriters = setupMetricsWriters(
           ioPeon, mergedMetrics, metricsValueTypes, metricTypeNames, indexSpec
       );
+      log.debug("metric wirters created");
       final List<IntBuffer> rowNumConversions = Lists.newArrayListWithCapacity(adapters.size());
-
+      log.debug("mergining index and write colums started");
       mergeIndexesAndWriteColumns(
           adapters, progress, theRows, timeWriter, metWriters, rowNumConversions, mergers
       );
-
+      log.debug("merging index and wirte columns finished");
       /************ Create Inverted Indexes and Finalize Build Columns *************/
       final String section = "build inverted index and columns";
       progress.startSection(section);
+      log.debug("start making time column");
       makeTimeColumn(v9Smoosher, progress, timeWriter);
-      makeMetricsColumns(v9Smoosher, progress, mergedMetrics, metricsValueTypes, metricTypeNames, metWriters);
-
+      log.debug("time column created and starting creating metric columns");
+      makeMetricsColumns(v9Smoosher, progress, mergedMetrics, metricsValueTypes, metricTypeNames,
+                         metWriters,indexSpec);
+      log.info("metrics columns made and making dims");
       for (int i = 0; i < mergedDimensions.size(); i++) {
         DimensionMergerV9 merger = (DimensionMergerV9) mergers.get(i);
         merger.writeIndexes(rowNumConversions, closer);
@@ -224,7 +231,7 @@ public class IndexMergerV9 extends IndexMerger
         ColumnDescriptor columnDesc = merger.makeColumnDescriptor();
         makeColumn(v9Smoosher, mergedDimensions.get(i), columnDesc);
       }
-
+      log.info("dimcolumns made");
       progress.stopSection(section);
 
       /************* Make index.drd & metadata.drd files **************/
@@ -328,7 +335,8 @@ public class IndexMergerV9 extends IndexMerger
       final List<String> mergedMetrics,
       final Map<String, ValueType> metricsValueTypes,
       final Map<String, String> metricTypeNames,
-      final List<GenericColumnSerializer> metWriters
+      final List<GenericColumnSerializer> metWriters,
+      final IndexSpec indexSpec
   ) throws IOException
   {
     final String section = "make metric columns";
@@ -350,6 +358,7 @@ public class IndexMergerV9 extends IndexMerger
               LongGenericColumnPartSerde.serializerBuilder()
                                         .withByteOrder(IndexIO.BYTE_ORDER)
                                         .withDelegate((LongColumnSerializer) writer)
+                                        .withSerdeFactory(indexSpec.getBitmapSerdeFactory())
                                         .build()
           );
           break;
@@ -439,11 +448,12 @@ public class IndexMergerV9 extends IndexMerger
       final List<IntBuffer> rowNumConversions,
       final List<DimensionMerger> mergers
   ) throws IOException
+
   {
     final String section = "walk through and merge rows";
     progress.startSection(section);
     long startTime = System.currentTimeMillis();
-
+    log.info("%s",section);
     int rowCount = 0;
     for (IndexableAdapter adapter : adapters) {
       int[] arr = new int[adapter.getNumRows()];
@@ -457,17 +467,20 @@ public class IndexMergerV9 extends IndexMerger
       timeWriter.serialize(theRow.getTimestamp());
 
       final Object[] metrics = theRow.getMetrics();
+      try{
       for (int i = 0; i < metrics.length; ++i) {
         metWriters.get(i).serialize(metrics[i]);
+      }}catch (Exception e){
+        log.error("metric serialization failed"+e);
       }
 
-      Object[] dims = theRow.getDims();
+      Object[] dims = theRow.getDims();  //dims {name, title, ...}
       for (int i = 0; i < dims.length; ++i) {
-        DimensionMerger merger = mergers.get(i);
+        DimensionMerger merger = mergers.get(i);   //{merger of title}
         if (merger.canSkip()) {
           continue;
         }
-        merger.processMergedRow(dims[i]);
+        merger.processMergedRow(dims[i]);   //process titles values on title merger
       }
 
       for (Map.Entry<Integer, TreeSet<Integer>> comprisedRow : theRow.getComprisedRows().entrySet()) {
@@ -519,7 +532,9 @@ public class IndexMergerV9 extends IndexMerger
       GenericColumnSerializer writer;
       switch (type) {
         case LONG:
-          writer = LongColumnSerializer.create(ioPeon, metric, metCompression, longEncoding);
+          writer = LongColumnSerializer.create(ioPeon, metric, metCompression, longEncoding)
+                                       .factory(indexSpec.getBitmapSerdeFactory());
+          log.info("metric writer added for %s",metric);
           break;
         case FLOAT:
           writer = FloatColumnSerializer.create(ioPeon, metric, metCompression);

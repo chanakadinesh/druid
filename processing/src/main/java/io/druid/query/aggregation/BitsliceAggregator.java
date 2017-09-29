@@ -20,36 +20,8 @@
 package io.druid.query.aggregation;
 
 import io.druid.collections.bitmap.ImmutableBitmap;
-import io.druid.segment.LongColumnSelector;
 
-import java.util.ArrayList;
-
-/**
- */
-public class TestLongColumnSelector implements LongColumnSelector
+public interface BitsliceAggregator
 {
-  private final long[] longs;
-
-  private int index = 0;
-
-  public TestLongColumnSelector(long[] longs)
-  {
-    this.longs = longs;
-  }
-
-  @Override
-  public long get()
-  {
-    return longs[index];
-  }
-
-  @Override
-  public ArrayList<ImmutableBitmap> getBitslice() {
-    return null;
-  }
-
-  public void increment()
-  {
-    ++index;
-  }
+	void aggregate(ImmutableBitmap filter);
 }

@@ -19,9 +19,13 @@
 
 package io.druid.segment.column;
 
+import io.druid.collections.bitmap.ImmutableBitmap;
+import io.druid.segment.data.BitSliceIndexedLongs;
 import io.druid.segment.data.Indexed;
 import io.druid.segment.data.IndexedFloats;
 import io.druid.segment.data.IndexedLongs;
+
+import java.util.ArrayList;
 
 /**
 */
@@ -93,5 +97,10 @@ public class IndexedLongsGenericColumn implements GenericColumn
   public void close()
   {
     column.close();
+  }
+
+  //Get bitslices
+  public ArrayList<ImmutableBitmap> getLongBitslice(){
+    return ((BitSliceIndexedLongs)column).getBitslices();
   }
 }

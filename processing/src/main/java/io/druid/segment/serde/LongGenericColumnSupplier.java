@@ -22,23 +22,31 @@ package io.druid.segment.serde;
 import com.google.common.base.Supplier;
 import io.druid.segment.column.GenericColumn;
 import io.druid.segment.column.IndexedLongsGenericColumn;
+//import io.druid.segment.data.CompressedLongsIndexedSupplier;
 import io.druid.segment.data.CompressedLongsIndexedSupplier;
+import io.druid.segment.data.IndexedLongs;
 
 /**
 */
 public class LongGenericColumnSupplier implements Supplier<GenericColumn>
 {
-  private final CompressedLongsIndexedSupplier column;
+  private final IndexedLongs column;
 
   public LongGenericColumnSupplier(
-      CompressedLongsIndexedSupplier column
+          IndexedLongs column
   ) {
     this.column = column;
+  }
+
+  public LongGenericColumnSupplier(
+          CompressedLongsIndexedSupplier column
+  ) {
+    this.column = column.get();
   }
 
   @Override
   public GenericColumn get()
   {
-    return new IndexedLongsGenericColumn(column.get());
+    return new IndexedLongsGenericColumn(column);
   }
 }

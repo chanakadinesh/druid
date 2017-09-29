@@ -23,6 +23,7 @@ import com.google.common.base.Predicate;
 import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableMap;
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.data.input.Row;
 import io.druid.query.dimension.DimensionSpec;
 import io.druid.query.extraction.ExtractionFn;
@@ -42,6 +43,7 @@ import io.druid.segment.data.RangeIndexedInts;
 import io.druid.segment.data.ZeroIndexedInts;
 
 import javax.annotation.Nullable;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -328,6 +330,11 @@ public class RowBasedColumnSelectorFactory implements ColumnSelectorFactory
         {
           return row.get().getTimestampFromEpoch();
         }
+
+        @Override
+        public ArrayList<ImmutableBitmap> getBitslice() {
+          return null;
+        }
       };
     } else {
       return new LongColumnSelector()
@@ -336,6 +343,11 @@ public class RowBasedColumnSelectorFactory implements ColumnSelectorFactory
         public long get()
         {
           return row.get().getLongMetric(columnName);
+        }
+
+        @Override
+        public ArrayList<ImmutableBitmap> getBitslice() {
+          return null;
         }
       };
     }

@@ -19,6 +19,7 @@
 
 package io.druid.query.groupby.epinephelinae;
 
+import io.druid.collections.bitmap.ImmutableBitmap;
 import io.druid.data.input.Row;
 import io.druid.query.dimension.DimensionSpec;
 import io.druid.segment.ColumnSelectorFactory;
@@ -27,6 +28,8 @@ import io.druid.segment.FloatColumnSelector;
 import io.druid.segment.LongColumnSelector;
 import io.druid.segment.ObjectColumnSelector;
 import io.druid.segment.column.ColumnCapabilities;
+
+import java.util.ArrayList;
 
 public class TestColumnSelectorFactory implements ColumnSelectorFactory
 {
@@ -65,6 +68,11 @@ public class TestColumnSelectorFactory implements ColumnSelectorFactory
       public long get()
       {
         return row.get().getLongMetric(columnName);
+      }
+
+      @Override
+      public ArrayList<ImmutableBitmap> getBitslice() {
+        return null;
       }
     };
   }
