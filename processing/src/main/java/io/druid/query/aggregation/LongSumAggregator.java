@@ -57,9 +57,15 @@ public class LongSumAggregator implements Aggregator,BitsliceAggregator
   }
 
   public void aggregate(ImmutableBitmap filter){
-    for(int i=1;i<bitmaps.size();i++){
-      ImmutableBitmap b=bitmaps.get(i).intersection(filter);
-      sum+=((b.size())*(1<<(i-1)));
+    if(filter.isEmpty()){
+      for(int i=1;i<bitmaps.size();i++){
+        sum+=((bitmaps.get(i).size())*(1<<(i-1)));
+      }
+    }else{
+      for(int i=1;i<bitmaps.size();i++){
+        ImmutableBitmap b=bitmaps.get(i).intersection(filter);
+        sum+=((b.size())*(1<<(i-1)));
+      }
     }
   }
 
