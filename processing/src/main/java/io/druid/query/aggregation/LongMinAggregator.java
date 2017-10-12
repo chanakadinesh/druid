@@ -20,11 +20,11 @@
 package io.druid.query.aggregation;
 
 import io.druid.collections.bitmap.BitmapFactory;
-import io.druid.collections.bitmap.ConciseBitmapFactory;
+
 import io.druid.collections.bitmap.ImmutableBitmap;
+import io.druid.collections.bitmap.RoaringBitmapFactory;
 import io.druid.segment.LongColumnSelector;
 
-import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Comparator;
 
@@ -33,7 +33,7 @@ import java.util.Comparator;
 public class LongMinAggregator implements Aggregator,BitsliceAggregator
 {
   static final Comparator COMPARATOR = LongSumAggregator.COMPARATOR;
-  private static final BitmapFactory ROARING_BITMAP_FACTORY = new ConciseBitmapFactory();
+  private static BitmapFactory ROARING_BITMAP_FACTORY;
   static long combineValues(Object lhs, Object rhs)
   {
     return Math.min(((Number) lhs).longValue(), ((Number) rhs).longValue());
@@ -96,8 +96,9 @@ public class LongMinAggregator implements Aggregator,BitsliceAggregator
 
   @Override
   public void aggregate(ImmutableBitmap filter) {
-    long max=0;
-
+    min=0;
+    ROARING_BITMAP_FACTORY=new RoaringBitmapFactory();
+	boolean started=false;  //             :new ConciseBitmapFactory();
     ImmutableBitmap comparator=filter;
     int row_size=bitmaps.get(0).size();
     for(int i=bitmaps.size()-1;i>0;i--){
@@ -106,12 +107,16 @@ public class LongMinAggregator implements Aggregator,BitsliceAggregator
       temp=temp.intersection(comparator);
       if(!temp.isEmpty()){
         comparator=temp;
-        max+=(1<<(i-1));
+        if(!started){
+	        started=true;
+        }
+      }else if(started){
+	      min+=(1<<(i-1));
       }
     }
-    String x=Long.toBinaryString(max);
-    String xm=Long.toBinaryString(~max);
-    xm=xm.substring(xm.length()-x.length());
-    min=new BigInteger(xm,2).longValue();
+    //String x=Long.toBinaryString(max);
+    //String xm=Long.toBinaryString(~max);
+    //xm=xm.substring(xm.length()-x.length());
+    //min=new BigInteger(xm,2).longValue();
   }
 }
