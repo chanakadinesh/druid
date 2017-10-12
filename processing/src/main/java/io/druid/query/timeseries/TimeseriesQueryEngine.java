@@ -66,14 +66,14 @@ public class TimeseriesQueryEngine
           public Result<TimeseriesResultValue> apply(Cursor cursor)
           {
             Aggregator[] aggregators = new Aggregator[aggregatorSpecs.size()];
-            ArrayList<Aggregator> BitsliceAggregator=new ArrayList<Aggregator>();
+            ArrayList<Aggregator> bitsliceAggregator=new ArrayList<Aggregator>();
             String[] aggregatorNames = new String[aggregatorSpecs.size()];
             boolean runwhile=false;
             for (int i = 0; i < aggregatorSpecs.size(); i++) {
               aggregators[i] = aggregatorSpecs.get(i).factorize(cursor);
               aggregatorNames[i] = aggregatorSpecs.get(i).getName();
               if(aggregators[i] instanceof BitsliceAggregator){
-                BitsliceAggregator.add(aggregators[i]);
+                bitsliceAggregator.add(aggregators[i]);
               }else{runwhile=true;}
             }
 
@@ -89,7 +89,7 @@ public class TimeseriesQueryEngine
                 }
                 cursor.advance();
               }
-              for(Aggregator agg:BitsliceAggregator){
+              for(Aggregator agg:bitsliceAggregator){
                 ((BitsliceAggregator)agg).aggregate(cursor.getFilter());
               }
 
